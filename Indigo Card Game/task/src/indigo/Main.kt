@@ -14,6 +14,12 @@ class `Indigo Card Game` {
     val cardsDeck = mutableSetOf<Card>()
     val cardsOnTable = mutableSetOf<Card>()
     var userWantsToPlayFirst = false
+    var playerScore = 0
+    var computerScore = 0
+    var playerCardsWon = mutableSetOf<Card>()
+    var computerCardsWon = mutableSetOf<Card>()
+    var lastWinnerIsPlayer: Boolean? = null
+    var candidateCard = mutableSetOf<Card>()
 
 
     init {
@@ -39,17 +45,20 @@ class `Indigo Card Game` {
         init {
             getAllPlayersCard()
             println("Initial cards on the table: ${cardsOnTable.joinToString(" ")}")
+            gameLoop()
+            endGame()
+        }
 
+
+        private fun gameLoop() {
             do {
-                println("\n${cardsOnTable.size} cards on the table, and the top card is ${cardsOnTable.last()}")
+                println("\n${if (cardsOnTable.isEmpty()) "No cards on the table" else "${cardsOnTable.size} cards on the table, and the top card is ${cardsOnTable.last()}"}")
                 if (userWantsToPlayFirst) displayPlayerPrompt() else computerPrompt()
-
-            } while (cardsOnTable.size != 52)
-            exit()
+            } while (cardsDeck.isNotEmpty() || playersCard.isNotEmpty() || computersCard.isNotEmpty())
         }
 
         private fun displayPlayerPrompt() {
-            println("Cards in hand: ${playersCard.printPlayerCard()}")
+            println("Cards in hand: ${playersCard.currentPlayerCard()}")
             playerPrompt()
         }
 
@@ -60,19 +69,24 @@ class `Indigo Card Game` {
         }
 
         private fun computerPrompt() {
-
-            val randomNumsList = MutableList(computersCard.size) { it }
-            val randomNum = randomNumsList.random()
-            val randomComputerCard = computersCard.elementAt(randomNum)
-            randomNumsList.remove(randomNum)
-
+            println( computersCard)
+            val randomComputerCard = computersCard.random()
             computersCard.remove(randomComputerCard)
             if (computersCard.isEmpty() && cardsDeck.isNotEmpty()) computersCard.resetCard()
             cardsOnTable.add(randomComputerCard)
             println("Computer plays $randomComputerCard")
+            checkWinCondition(randomComputerCard, false)
             userWantsToPlayFirst = true
+
         }
 
+        private fun computersStategy(){
+            when {
+                computersCard.size == 1 -> candidateCard.add(computersCard.last())
+
+            }
+
+        }
         private fun processInput(input: Any?) {
             val inputToString = input as? String
             when {
@@ -83,15 +97,16 @@ class `Indigo Card Game` {
                     try {
                         val inputToInt = inputToString.toInt()
                         when (inputToInt) {
-                            in 1..6 -> {
+                            in 1..playersCard.size -> {
                                 val card = playersCard.elementAtOrNull(inputToInt - 1)
                                 if (card != null) {
                                     playersCard.remove(card)
-                                    if (playersCard.isEmpty() && cardsDeck.isNotEmpty()) playersCard.resetCard()
                                     cardsOnTable.add(card)
+                                    if (playersCard.isEmpty() && cardsDeck.isNotEmpty()) playersCard.resetCard()
+                                    checkWinCondition(card, true)
                                     userWantsToPlayFirst = false
                                 } else {
-                                    displayPlayerPrompt()
+                                    playerPrompt()
                                 }
                             }
 
@@ -102,6 +117,34 @@ class `Indigo Card Game` {
                     }
                 }
             }
+        }
+
+        private fun checkWinCondition(playedCard: Card, isPlayer: Boolean) {
+            val topCard = cardsOnTable.elementAtOrNull(cardsOnTable.size - 2)
+            if (topCard != null && (playedCard.suit == topCard.suit || playedCard.rank == topCard.rank)) {
+                if (isPlayer) {
+                    println("Player wins cards")
+                    playerCardsWon.addAll(cardsOnTable)
+                    playerScore += calculatePoints(cardsOnTable)
+                    lastWinnerIsPlayer = true
+                } else {
+                    println("Computer wins cards")
+                    computerCardsWon.addAll(cardsOnTable)
+                    computerScore += calculatePoints(cardsOnTable)
+                    lastWinnerIsPlayer = false
+                }
+                cardsOnTable.clear()
+                displayScore()
+            }
+        }
+
+        private fun calculatePoints(cards: Set<Card>): Int {
+            return cards.count { it.rank in listOf(Ranks.ACE, Ranks.TEN, Ranks.JACK, Ranks.QUEEN, Ranks.KING) }
+        }
+
+        private fun displayScore() {
+            println("Score: Player $playerScore - Computer $computerScore")
+            println("Cards: Player ${playerCardsWon.size} - Computer ${computerCardsWon.size}")
         }
 
         private fun getAllPlayersCard() {
@@ -121,20 +164,67 @@ class `Indigo Card Game` {
                 if (counter == numberOfCard)
                     break@loop
             }
-            counter = 0
             cardsDeck.removeAll(newCards.toSet())
             newCards.clear()
         }
 
-        private fun MutableSet<Card>.printPlayerCard(): String {
+        private fun MutableSet<Card>.currentPlayerCard(): String {
             val playersCard = StringBuilder()
             this.forEachIndexed { index, card ->
                 playersCard.append("${index + 1})$card ")
             }
             return playersCard.toString()
-
         }
 
+
+        private fun initialCardsOnTable(): MutableSet<Card> {
+            var count = 0
+            exit@ for (card in cardsDeck.shuffled()) {
+                count++
+                cardsOnTable.add(card)
+                if (count == 4) break@exit
+            }
+            cardsDeck.removeAll(cardsOnTable)
+            return cardsOnTable
+        }
+
+        private fun endGame() {
+
+            val remainingCards = cardsOnTable.size
+            if (remainingCards > 0) {
+                if (lastWinnerIsPlayer == true) {
+                    playerCardsWon.addAll(cardsOnTable)
+                    playerScore += calculatePoints(cardsOnTable)
+                } else if (lastWinnerIsPlayer == false) {
+                    computerCardsWon.addAll(cardsOnTable)
+                    computerScore += calculatePoints(cardsOnTable)
+                } else if (userWantsToPlayFirst) {
+                    playerCardsWon.addAll(cardsOnTable)
+                    playerScore += calculatePoints(cardsOnTable)
+                } else {
+                    computerCardsWon.addAll(cardsOnTable)
+                    computerScore += calculatePoints(cardsOnTable)
+                }
+            }
+
+            if (playerCardsWon.size > computerCardsWon.size) {
+                playerScore += 3
+            } else if (playerCardsWon.size < computerCardsWon.size) {
+                computerScore += 3
+            } else {
+                if (userWantsToPlayFirst) {
+                    playerScore += 3
+                } else {
+                    computerScore += 3
+                }
+            }
+
+            println("\n${if (cardsOnTable.isEmpty()) "No cards on the table" else "${cardsOnTable.size} cards on the table, and the top card is ${cardsOnTable.last()}"}")
+            displayScore()
+            println("Game Over")
+            exitProcess(0)
+
+        }
     }
 
     private fun generateAllCards(): MutableSet<Card> {
@@ -147,18 +237,6 @@ class `Indigo Card Game` {
         return cardsDeck
     }
 
-    private fun initialCardsOnTable(): MutableSet<Card> {
-        var count = 0
-        exit@ for (card in cardsDeck.shuffled()) {
-            count++
-            cardsOnTable.add(card)
-            if (count == 4) break@exit
-        }
-        cardsDeck.removeAll(cardsOnTable)
-        return cardsOnTable
-
-    }
-
     private fun exit() {
         println(
             if (cardsDeck.isEmpty())
@@ -167,7 +245,6 @@ class `Indigo Card Game` {
         )
         exitProcess(0)
     }
-
 
     inner class Card(val rank: Ranks, val suit: Suits) {
         override fun toString() = "${rank.tag}${suit.icon}"
